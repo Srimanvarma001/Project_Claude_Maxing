@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Claude Dashboard</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+
+body{
+  --bg:#0d0d0d;
+  --text:#f0ede8;
+  --muted-txt:#666;
+  --bar-track:rgba(255,255,255,0.08);
+  --toggle-bg:#1a1a1a;
+  --toggle-border:rgba(255,255,255,0.1);
+  --name-hover:rgba(255,255,255,0.06);
+  --input-bg:rgba(255,255,255,0.07);
+  --input-border:rgba(255,255,255,0.15);
+  --btn-ring:rgba(255,255,255,0.18);
+  --blue:#378ADD;
+  --red:#E24B4A;
+  --orange:#C8602E;
+  background:var(--bg);
+  color:var(--text);
+  font-family:'Segoe UI',system-ui,sans-serif;
+  min-height:100vh;
+  display:flex;flex-direction:column;align-items:center;
+  padding:2.5rem 2rem 3rem;
+  transition:background 0.3s,color 0.3s;
+}
+body.light{
+  --bg:#f4f2ef;
+  --text:#1a1206;
+  --muted-txt:#aaa;
+  --bar-track:rgba(0,0,0,0.08);
+  --toggle-bg:#eae7e0;
+  --toggle-border:rgba(0,0,0,0.1);
+  --name-hover:rgba(0,0,0,0.05);
+  --input-bg:rgba(0,0,0,0.05);
+  --input-border:rgba(0,0,0,0.15);
+  --btn-ring:rgba(0,0,0,0.18);
+}
+
+.hdr{
+  width:100%;max-width:580px;
+  display:flex;align-items:center;justify-content:space-between;
+  margin-bottom:4rem;
+}
+.hdr-title{font-size:15px;font-weight:700;letter-spacing:-0.01em;}
+.tog{
+  display:flex;align-items:center;gap:7px;
+  background:var(--toggle-bg);border:1px solid var(--toggle-border);
+  border-radius:40px;padding:5px 14px 5px 10px;
+  cursor:pointer;font-size:10px;letter-spacing:0.08em;
+  color:var(--muted-txt);font-family:monospace;user-select:none;
+  transition:color 0.2s;
+}
+.tog:hover{color:var(--text);}
+.tog-icon{font-size:12px;line-height:1;}
+
+.stage{position:relative;width:560px;height:380px;}
+
+.item{
+  position:absolute;display:flex;flex-direction:column;
+  align-items:center;width:100px;
+}
+.clawd-wrap{transition:opacity 0.4s;}
+.item.dim .clawd-wrap{opacity:0.2;}
+
+.nm{
+  font-size:11px;font-weight:600;color:var(--text);
+  text-align:center;margin:10px 0 8px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  max-width:96px;cursor:pointer;padding:1px 5px;
+  border-radius:5px;transition:background 0.15s;
+}
+.nm:hover{background:var(--name-hover);}
+.nm-inp{
+  font-size:11px;font-weight:600;font-family:inherit;color:var(--text);
+  background:var(--input-bg);border:1px solid var(--input-border);
+  border-radius:5px;padding:1px 5px;width:96px;
+  text-align:center;outline:none;margin:10px 0 8px;
+}
+
+.brow{display:flex;align-items:center;gap:6px;width:100%;}
+.btrack{flex:1;height:2.5px;background:var(--bar-track);border-radius:2px;overflow:hidden;}
+.bfill{height:100%;width:100%;background:var(--blue);border-radius:2px;transition:width 1s linear,background 0.4s;}
+
+.lbtn{
+  width:15px;height:15px;border-radius:50%;
+  border:1.5px solid var(--btn-ring);background:transparent;
+  cursor:pointer;display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;padding:0;transition:border-color 0.2s,opacity 0.25s;
+}
+.lbtn::after{content:'';width:5px;height:1.5px;background:var(--muted-txt);border-radius:1px;transition:background 0.2s;}
+.lbtn:hover{border-color:var(--orange);}
+.lbtn:hover::after{background:var(--orange);}
+
+.tmr{font-family:monospace;font-size:9px;color:var(--muted-txt);text-align:center;margin-top:5px;min-height:11px;width:100%;letter-spacing:0.02em;}
+.tmr.on{color:var(--red);}
+
+.sum{display:flex;gap:20px;margin-top:3rem;font-family:monospace;font-size:10.5px;color:var(--muted-txt);}
+.si{display:flex;align-items:center;gap:5px;}
+.sd{width:5px;height:5px;border-radius:50%;}
+
+.sync-status{
+  position:fixed;bottom:20px;right:20px;font-size:11px;color:var(--muted-txt);
+  font-family:monospace;padding:8px 12px;background:var(--toggle-bg);
+  border:1px solid var(--toggle-border);border-radius:4px;
+}
+.sync-status.connected{color:#4ade80;}
+.sync-status.disconnected{color:var(--red);}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <span class="hdr-title">Claude Dashboard</span>
+  <div class="tog" id="tog">
+    <span class="tog-icon" id="togIcon">☀</span>
+    <span id="togLbl">LIGHT</span>
+  </div>
+</div>
+
+<div class="stage" id="stage"></div>
+<div class="sum" id="sum"></div>
+<div class="sync-status" id="syncStatus">Connecting...</div>
+
+<!-- Firebase SDK - Using compat version for easier integration -->
+<script src="https://www.gstatic.com/firebaseapp/11.0.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebaseapp/11.0.2/firebase-database-compat.js"></script>
+
+<script>
+const RESET_MS = 5*60*60*1000;
+
+// ===== FIREBASE CONFIG =====
+const firebaseConfig = {
+  apiKey: "AIzaSyCY32VZTJSlV6xpby-lpRnsK4ersD0U3TI",
+  authDomain: "claude-dashboard-b2dfd.firebaseapp.com",
+  databaseURL: "https://claude-dashboard-b2dfd-default-rtdb.firebaseio.com",
+  projectId: "claude-dashboard-b2dfd",
+  storageBucket: "claude-dashboard-b2dfd.firebasestorage.app",
+  messagingSenderId: "729973748949",
+  appId: "1:729973748949:web:3593c42833344153339e5c"
+};
+
+let db, accountsRef;
+let localState = {};
+let isConnected = false;
+
+// Wait for Firebase to load before initializing
+function waitForFirebase() {
+  if (typeof firebase === 'undefined') {
+    setTimeout(waitForFirebase, 50);
+    return;
+  }
+  
+  try {
+    const app = firebase.initializeApp(firebaseConfig);
+    db = firebase.database(app);
+    accountsRef = db.ref('dashboard/accounts');
+    
+    // Listen for connection status
+    db.ref('.info/connected').on('value', (snap) => {
+      isConnected = snap.val();
+      updateSyncStatus();
+    });
+
+    // Listen for all changes from Firebase
+    accountsRef.on('value', (snapshot) => {
+      localState = snapshot.val() || {};
+      renderAll();
+    });
+    
+    console.log('Firebase initialized successfully');
+    updateSyncStatus();
+  } catch (err) {
+    console.error('Firebase init error:', err);
+  }
+}
+
+// Start initialization when page loads
+setTimeout(waitForFirebase, 100);
+
+function updateSyncStatus() {
+  const el = document.getElementById('syncStatus');
+  if (!el) return;
+  
+  if (isConnected) {
+    el.textContent = '✓ Synced';
+    el.classList.add('connected');
+    el.classList.remove('disconnected');
+  } else {
+    el.textContent = '⊘ Offline';
+    el.classList.add('disconnected');
+    el.classList.remove('connected');
+  }
+}
+
+/* ─── Clawd SVG logos ─────────────────────────────────────
+   Built from pure rects — matches the sticker shape exactly.
+────────────────────────────────────────────────────────── */
+const C  = '#C8602E';
+const EYE= '#2a1208';
+
+function clawdSVG(squint){
+  const parts = [
+    `<rect x="14" y="0"  width="72" height="62" fill="${C}" rx="3"/>`,
+    `<rect x="0"  y="15" width="16" height="26" fill="${C}" rx="2"/>`,
+    `<rect x="84" y="15" width="16" height="26" fill="${C}" rx="2"/>`,
+    `<rect x="16" y="62" width="26" height="28" fill="${C}" rx="2"/>`,
+    `<rect x="58" y="62" width="26" height="28" fill="${C}" rx="2"/>`,
+  ];
+
+  const eyes = squint
+    ? [
+        `<polyline points="25,22 37,29 25,36" fill="none" stroke="${EYE}" stroke-width="5.5" stroke-linejoin="round" stroke-linecap="round"/>`,
+        `<polyline points="75,22 63,29 75,36" fill="none" stroke="${EYE}" stroke-width="5.5" stroke-linejoin="round" stroke-linecap="round"/>`,
+      ]
+    : [
+        `<rect x="27" y="20" width="14" height="14" fill="${EYE}" rx="1"/>`,
+        `<rect x="59" y="20" width="14" height="14" fill="${EYE}" rx="1"/>`,
+      ];
+
+  return `<svg viewBox="0 0 100 90" width="82" height="74"
+    xmlns="http://www.w3.org/2000/svg" class="clawd-wrap" style="display:block">
+    ${parts.join('')}${eyes.join('')}
+  </svg>`;
+}
+
+/* ─── layout ─────────────────────────────────────────── */
+const IW=100, W=560;
+const POS=[
+  {left:W/2-120-IW/2, top:8},
+  {left:W/2+120-IW/2, top:8},
+  {left:W/2-190-IW/2, top:218},
+  {left:W/2      -IW/2, top:218},
+  {left:W/2+190-IW/2, top:218},
+];
+
+const stage=document.getElementById('stage');
+
+function initializeUI() {
+  stage.innerHTML = '';
+  
+  Object.keys(localState).forEach(id => {
+    const acc = localState[id];
+    const idNum = parseInt(id);
+    const p = POS[idNum];
+    const el = document.createElement('div');
+    el.className = 'item';
+    el.id = `it${id}`;
+    el.style.left = p.left + 'px';
+    el.style.top = p.top + 'px';
+
+    el.innerHTML = `
+      <div id="L${id}">${clawdSVG(false)}</div>
+      <div class="nm" id="N${id}" title="Click to rename">${acc.name}</div>
+      <div class="brow">
+        <div class="btrack"><div class="bfill" id="B${id}"></div></div>
+        <button class="lbtn" id="X${id}" title="Start 5-hour limit"></button>
+      </div>
+      <div class="tmr" id="T${id}"></div>
+    `;
+
+    el.querySelector(`#N${id}`).addEventListener('click', (e) => {
+      e.stopPropagation();
+      const lbl = document.getElementById(`N${id}`);
+      const inp = document.createElement('input');
+      inp.className = 'nm-inp';
+      inp.value = acc.name;
+      lbl.replaceWith(inp);
+      inp.focus();
+      inp.select();
+      
+      const done = () => {
+        const v = inp.value.trim() || acc.name;
+        if (accountsRef) {
+          accountsRef.child(id).update({ name: v });
+        }
+        inp.replaceWith(lbl);
+        lbl.textContent = v;
+      };
+      
+      inp.addEventListener('blur', done);
+      inp.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') inp.blur();
+      });
+    });
+
+    el.querySelector(`#X${id}`).addEventListener('click', () => startLimit(id));
+    stage.appendChild(el);
+  });
+}
+
+function startLimit(id) {
+  const acc = localState[id];
+  if (!acc || acc.limited) return;
+  
+  const resetAt = Date.now() + RESET_MS;
+  if (accountsRef) {
+    accountsRef.child(id).update({
+      limited: true,
+      resetAt: resetAt
+    });
+  }
+}
+
+function fmt(ms) {
+  if (ms <= 0) return '0:00:00';
+  const h = Math.floor(ms / 3600000);
+  const m = Math.floor((ms % 3600000) / 60000);
+  const s = Math.floor((ms % 60000) / 1000);
+  return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
+function render(id) {
+  const acc = localState[id];
+  if (!acc) return;
+  
+  const it = document.getElementById(`it${id}`);
+  const L = document.getElementById(`L${id}`);
+  const B = document.getElementById(`B${id}`);
+  const X = document.getElementById(`X${id}`);
+  const T = document.getElementById(`T${id}`);
+  
+  if (!it) return;
+  
+  if (!acc.limited) {
+    it.classList.remove('dim');
+    L.innerHTML = clawdSVG(false);
+    B.style.width = '100%';
+    B.style.background = 'var(--blue)';
+    X.style.opacity = '1';
+    X.style.pointerEvents = 'auto';
+    T.textContent = '';
+    T.className = 'tmr';
+  } else {
+    const rem = Math.max(0, acc.resetAt - Date.now());
+    if (rem <= 0) {
+      if (accountsRef) {
+        accountsRef.child(id).update({
+          limited: false,
+          resetAt: null
+        });
+      }
+      return;
+    }
+    it.classList.add('dim');
+    L.innerHTML = clawdSVG(true);
+    B.style.width = (rem / RESET_MS * 100) + '%';
+    B.style.background = 'var(--red)';
+    X.style.opacity = '0';
+    X.style.pointerEvents = 'none';
+    T.textContent = fmt(rem);
+    T.className = 'tmr on';
+  }
+}
+
+function renderAll() {
+  initializeUI();
+  Object.keys(localState).forEach(id => render(id));
+  
+  const lim = Object.values(localState).filter(s => s.limited).length;
+  const ready = Object.keys(localState).length - lim;
+  const sumEl = document.getElementById('sum');
+  if (sumEl) {
+    sumEl.innerHTML = `
+      <div class="si"><div class="sd" style="background:var(--blue)"></div>${ready} ready</div>
+      <div class="si"><div class="sd" style="background:var(--red)"></div>${lim} limited</div>
+    `;
+  }
+}
+
+// Tick every second to update timers
+setInterval(() => {
+  Object.keys(localState).forEach(id => {
+    if (localState[id].limited) render(id);
+  });
+}, 1000);
+
+// Theme toggle
+document.getElementById('tog').addEventListener('click', () => {
+  const on = document.body.classList.toggle('light');
+  document.getElementById('togIcon').textContent = on ? '☽' : '☀';
+  document.getElementById('togLbl').textContent = on ? 'DARK' : 'LIGHT';
+});
+</script>
+</body>
+</html>
