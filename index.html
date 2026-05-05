@@ -128,8 +128,8 @@ body.light{
 <div class="sync-status" id="syncStatus">Connecting...</div>
 
 <!-- Firebase SDK -->
-<script src="https://www.gstatic.com/firebaseapp/11.0.2/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebaseapp/11.0.2/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 
 <script>
 const RESET_MS = 5*60*60*1000;
@@ -222,21 +222,6 @@ function waitForFirebase() {
 
 // Start initialization
 setTimeout(waitForFirebase, 500);
-
-function updateSyncStatus() {
-  const el = document.getElementById('syncStatus');
-  if (!el) return;
-  
-  if (isConnected) {
-    el.textContent = '✓ Synced';
-    el.classList.add('connected');
-    el.classList.remove('disconnected');
-  } else {
-    el.textContent = '⊘ Offline';
-    el.classList.add('disconnected');
-    el.classList.remove('connected');
-  }
-}
 
 /* ─── Clawd SVG logos ─────────────────────────────────────
    Built from pure rects — matches the sticker shape exactly.
@@ -425,7 +410,7 @@ function renderAll() {
 
 // Initialize immediately with default state
 renderAll();
-updateSyncStatus();
+updateSyncStatus('loading');
 
 // Tick every second to update timers
 setInterval(() => {
