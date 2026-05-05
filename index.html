@@ -127,7 +127,7 @@ body.light{
 <div class="sum" id="sum"></div>
 <div class="sync-status" id="syncStatus">Connecting...</div>
 
-<!-- Firebase SDK - Using compat version for easier integration -->
+<!-- Firebase SDK -->
 <script src="https://www.gstatic.com/firebaseapp/11.0.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebaseapp/11.0.2/firebase-database-compat.js"></script>
 
@@ -149,39 +149,79 @@ let db, accountsRef;
 let localState = {};
 let isConnected = false;
 
+// Default state if Firebase doesn't load
+const defaultState = {
+  "0": { id: 0, name: "Account 1", limited: false, resetAt: null },
+  "1": { id: 1, name: "Account 2", limited: false, resetAt: null },
+  "2": { id: 2, name: "Account 3", limited: false, resetAt: null },
+  "3": { id: 3, name: "Account 4", limited: false, resetAt: null },
+  "4": { id: 4, name: "Account 5", limited: false, resetAt: null }
+};
+
+// Initialize with default state immediately
+localState = JSON.parse(JSON.stringify(defaultState));
+
+function updateSyncStatus(status) {
+  const el = document.getElementById('syncStatus');
+  if (!el) return;
+  
+  if (status === 'connected') {
+    el.textContent = '✓ Synced';
+    el.className = 'sync-status connected';
+  } else if (status === 'disconnected') {
+    el.textContent = '⊘ Offline';
+    el.className = 'sync-status disconnected';
+  } else if (status === 'loading') {
+    el.textContent = 'Connecting...';
+    el.className = 'sync-status loading';
+  }
+}
+
 // Wait for Firebase to load before initializing
 function waitForFirebase() {
   if (typeof firebase === 'undefined') {
-    setTimeout(waitForFirebase, 50);
+    console.log('Waiting for Firebase...');
+    setTimeout(waitForFirebase, 100);
     return;
   }
   
+  console.log('Firebase loaded, initializing...');
   try {
     const app = firebase.initializeApp(firebaseConfig);
     db = firebase.database(app);
     accountsRef = db.ref('dashboard/accounts');
     
+    console.log('Database reference created');
+    
     // Listen for connection status
     db.ref('.info/connected').on('value', (snap) => {
       isConnected = snap.val();
-      updateSyncStatus();
+      console.log('Connection status:', isConnected);
+      updateSyncStatus(isConnected ? 'connected' : 'disconnected');
     });
 
     // Listen for all changes from Firebase
     accountsRef.on('value', (snapshot) => {
-      localState = snapshot.val() || {};
-      renderAll();
+      const data = snapshot.val();
+      console.log('Firebase data received:', data);
+      if (data) {
+        localState = data;
+        renderAll();
+      }
+    }, (error) => {
+      console.error('Firebase error:', error);
+      updateSyncStatus('disconnected');
     });
     
     console.log('Firebase initialized successfully');
-    updateSyncStatus();
   } catch (err) {
     console.error('Firebase init error:', err);
+    updateSyncStatus('disconnected');
   }
 }
 
-// Start initialization when page loads
-setTimeout(waitForFirebase, 100);
+// Start initialization
+setTimeout(waitForFirebase, 500);
 
 function updateSyncStatus() {
   const el = document.getElementById('syncStatus');
@@ -243,6 +283,7 @@ const stage=document.getElementById('stage');
 
 function initializeUI() {
   stage.innerHTML = '';
+  console.log('Initializing UI with state:', localState);
   
   Object.keys(localState).forEach(id => {
     const acc = localState[id];
@@ -276,8 +317,9 @@ function initializeUI() {
       
       const done = () => {
         const v = inp.value.trim() || acc.name;
+        localState[id].name = v;
         if (accountsRef) {
-          accountsRef.child(id).update({ name: v });
+          accountsRef.child(id).update({ name: v }).catch(err => console.error('Update error:', err));
         }
         inp.replaceWith(lbl);
         lbl.textContent = v;
@@ -299,12 +341,17 @@ function startLimit(id) {
   if (!acc || acc.limited) return;
   
   const resetAt = Date.now() + RESET_MS;
+  localState[id].limited = true;
+  localState[id].resetAt = resetAt;
+  
   if (accountsRef) {
     accountsRef.child(id).update({
       limited: true,
       resetAt: resetAt
-    });
+    }).catch(err => console.error('Update error:', err));
   }
+  
+  render(id);
 }
 
 function fmt(ms) {
@@ -339,12 +386,15 @@ function render(id) {
   } else {
     const rem = Math.max(0, acc.resetAt - Date.now());
     if (rem <= 0) {
+      localState[id].limited = false;
+      localState[id].resetAt = null;
       if (accountsRef) {
         accountsRef.child(id).update({
           limited: false,
           resetAt: null
-        });
+        }).catch(err => console.error('Update error:', err));
       }
+      render(id);
       return;
     }
     it.classList.add('dim');
@@ -373,6 +423,10 @@ function renderAll() {
   }
 }
 
+// Initialize immediately with default state
+renderAll();
+updateSyncStatus();
+
 // Tick every second to update timers
 setInterval(() => {
   Object.keys(localState).forEach(id => {
@@ -386,6 +440,8 @@ document.getElementById('tog').addEventListener('click', () => {
   document.getElementById('togIcon').textContent = on ? '☽' : '☀';
   document.getElementById('togLbl').textContent = on ? 'DARK' : 'LIGHT';
 });
+
+console.log('Dashboard initialization complete');
 </script>
 </body>
 </html>
